@@ -24,7 +24,7 @@ runtime_sniper_ubuntu12.zip.328e060d569aa12d70746dab1f74cd54196edf9c
 miles_ubuntu12.zip.vz.5093ef941e6e5195a60ab3259077694dec994016_295496
 )
 
-if [[ ${{PREINSTALL_STEAM_PACKAGE:-}} == "true" ]]; then
+if [[ ${PREINSTALL_STEAM_PACKAGE:-} == "true" ]]; then
     echo "Pre-installing Steam package ... "
     for p in ${pkg[@]}; do
         if [[ ! -f /usr/local/src/$p ]]; then
