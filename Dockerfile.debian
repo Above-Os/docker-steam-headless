@@ -156,6 +156,7 @@ RUN \
     && \
     echo "**** Install X Server requirements ****" \
         && apt-get install -y --no-install-recommends \
+            avahi-daemon \
             avahi-utils \
             dbus-x11 \
             libxcomposite-dev \

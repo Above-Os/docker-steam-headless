@@ -115,3 +115,17 @@ wait_for_udevd() {
         fi
     done
 }
+
+# Wait for avahi-daemon to start
+wait_for_avahi() {
+    MAX=10
+    CT=0
+    while ! pgrep -x avahi-daemon >/dev/null 2>&1; do
+        sleep 1
+        CT=$(( CT + 1 ))
+        if [ "$CT" -ge "$MAX" ]; then
+            echo "FATAL: $0: Gave up waiting for avahi-daemon to start"
+            exit 11
+        fi
+    done
+}

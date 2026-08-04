@@ -85,6 +85,10 @@ export_desktop_dbus_session
 # Wait for the desktop to start
 wait_for_desktop
 
+# Wait for avahi-daemon (mDNS) to start
+echo "wait for avahi-daemon"
+wait_for_avahi
+
 if [ "${ENABLE_SYSTEMD_UDEVD}" == "true" ]; then
     echo "wait for systemd-udevd"
     wait_for_udevd
