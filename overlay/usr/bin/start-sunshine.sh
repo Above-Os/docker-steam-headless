@@ -42,11 +42,17 @@ if [ -f /etc/ld.so.preload ]; then
     cat /dev/null > ${USER_HOME:?}/.config/sunshine/so.preload && mount --bind ${USER_HOME:?}/.config/sunshine/so.preload /etc/ld.so.preload
 fi
 
+EXTERNAL_IP="${NODE_IP:?}"
+UNDERLAY_IP=$(ifconfig net1 | grep -oP 'inet (addr:)?\K[\d\.]+' | head -n1)
+if [ "X${UNDERLAY_IP}" != "X" ]; then
+    EXTERNAL_IP="${UNDERLAY_IP:?}"
+fi
+
 if [ ! -f "${USER_HOME:?}/.config/sunshine/sunshine.conf" ]; then
     cp -vf /templates/sunshine/sunshine.conf "${USER_HOME:?}/.config/sunshine/sunshine.conf"
-    echo "external_ip = ${NODE_IP}" >> "${USER_HOME:?}/.config/sunshine/sunshine.conf"
+    echo "external_ip = ${EXTERNAL_IP}" >> "${USER_HOME:?}/.config/sunshine/sunshine.conf"
 else
-    sed -i "s/external_ip = .*/external_ip = ${NODE_IP}/" "${USER_HOME:?}/.config/sunshine/sunshine.conf"
+    sed -i "s/external_ip = .*/external_ip = ${EXTERNAL_IP}/" "${USER_HOME:?}/.config/sunshine/sunshine.conf"
 fi
 if [ ! -f "${USER_HOME:?}/.config/sunshine/apps.json" ]; then
     cp -vf /templates/sunshine/apps.json "${USER_HOME:?}/.config/sunshine/apps.json"
