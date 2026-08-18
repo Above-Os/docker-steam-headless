@@ -19,6 +19,7 @@ if ([ "${MODE}" != "s" ] && [ "${MODE}" != "secondary" ]); then
         mkdir -p /var/run/dbus
         chown -R ${PUID}:${PGID} /var/run/dbus/
         chmod -R 770 /var/run/dbus/
+        chmod 0775 /var/run/dbus
         # Generate a dbus machine ID
         dbus-uuidgen > /var/lib/dbus/machine-id
         # Remove old lockfiles
