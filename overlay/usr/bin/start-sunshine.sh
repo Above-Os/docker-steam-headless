@@ -39,7 +39,7 @@ trap _term SIGTERM SIGINT
 mkdir -p "${USER_HOME:?}/.config/sunshine"
 # FIXME:
 if [ -f /etc/ld.so.preload ]; then
-    cat /dev/null > ${USER_HOME:?}/.config/sunshine/so.preload && mount --bind ${USER_HOME:?}/.config/sunshine/so.preload /etc/ld.so.preload
+    cat /dev/null > ${USER_HOME:?}/.config/sunshine/so.preload && sudo mount --bind ${USER_HOME:?}/.config/sunshine/so.preload /etc/ld.so.preload
 fi
 
 EXTERNAL_IP="${NODE_IP:?}"
