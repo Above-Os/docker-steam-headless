@@ -16,6 +16,10 @@ _term() {
 }
 trap _term SIGTERM SIGINT
 
+# k8s sets PULSE_SERVER=unix:/tmp/pulse/pulse-socket, but the daemon listens on
+# $XDG_RUNTIME_DIR/pulse/native until we explicitly expose that extra socket.
+# Using the env var here makes pactl fail, then this script kills PulseAudio.
+unset PULSE_SERVER
 
 # EXECUTE PROCESS:
 echo "PULSEAUDIO: Starting pulseaudio service"
@@ -38,13 +42,29 @@ wait_for_pulse() {
     done
 }
 
+wait_for_pulse
+
+# Expose the socket path that Steam/container env expects (PULSE_SERVER).
+if [ -n "${PULSE_SOCKET_DIR:-}" ]; then
+    mkdir -p "${PULSE_SOCKET_DIR}"
+    chmod 777 "${PULSE_SOCKET_DIR}"
+    if [ ! -S "${PULSE_SOCKET_DIR}/pulse-socket" ]; then
+        echo "PULSEAUDIO: Creating ${PULSE_SOCKET_DIR}/pulse-socket"
+        pactl load-module module-native-protocol-unix \
+            socket="${PULSE_SOCKET_DIR}/pulse-socket" auth-anonymous=1 \
+            || echo "PULSEAUDIO: WARNING: failed to create ${PULSE_SOCKET_DIR}/pulse-socket"
+    fi
+fi
+
 if [[ "${DEVICE_NAME}" = "Olares One" ]]; then
     echo "PULSEAUDIO: Setting Olares One HDMI audio output"
-    wait_for_pulse
     # Set HDMI audio output
-    pactl load-module module-alsa-sink device=plughw:0,3 sink_name=nvhdmi || { kill -TERM "$pulseaudio_pid" 2>/dev/null && exit 12; }
-    amixer -c 0 sset 'IEC958' on
-    # pactl unload-module module-alsa-sink
+    if pactl load-module module-alsa-sink device=plughw:0,3 sink_name=nvhdmi; then
+        pactl set-default-sink nvhdmi || true
+        amixer -c 0 sset 'IEC958' on || true
+    else
+        echo "PULSEAUDIO: WARNING: failed to load HDMI sink plughw:0,3"
+    fi
 fi
 
 # WAIT FOR CHILD PROCESS:
