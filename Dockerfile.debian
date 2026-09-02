@@ -472,6 +472,8 @@ RUN \
             steam-libs:i386=1:1.0.0.83~ds-3 \
             steam-installer=1:1.0.0.83~ds-3 \
             gamescope \
+            mangohud \
+            mangohud:i386 \
         && ln -sf /usr/games/steam /usr/bin/steam \
     && \
     echo "**** Section cleanup ****" \

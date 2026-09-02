@@ -49,8 +49,10 @@ function configure_nvidia_x_server {
     sed -i '/Driver\s\+"nvidia"/a\    Option         "PrimaryGPU" "yes"' /etc/X11/xorg.conf
     # Force X server to start even if no display devices are connected
     sed -i '/Driver\s\+"nvidia"/a\    Option         "AllowEmptyInitialConfiguration"' /etc/X11/xorg.conf
-    # Disable some mode validation checks
-    sed -i '/Driver\s\+"nvidia"/a\    Option         "ModeValidation" "NoMaxPClkCheck, NoEdidMaxPClkCheck, NoMaxSizeCheck, NoHorizSyncCheck, NoVertRefreshCheck, NoVirtualSizeCheck, NoTotalSizeCheck, NoDualLinkDVICheck, NoDisplayPortBandwidthCheck, AllowNon3DVisionModes, AllowNonHDMI3DModes, AllowNonEdidModes, NoEdidHDMI2Check, AllowDpInterlaced"' /etc/X11/xorg.conf
+    # Disable some mode validation checks. NoMaxPClkCheck stays enabled so that a
+    # mode exceeding the head's physical pixel clock is rejected rather than
+    # programmed, which would wedge the display engine until the host reboots.
+    sed -i '/Driver\s\+"nvidia"/a\    Option         "ModeValidation" "NoEdidMaxPClkCheck, NoMaxSizeCheck, NoHorizSyncCheck, NoVertRefreshCheck, NoVirtualSizeCheck, NoTotalSizeCheck, NoDualLinkDVICheck, NoDisplayPortBandwidthCheck, AllowNon3DVisionModes, AllowNonHDMI3DModes, AllowNonEdidModes, NoEdidHDMI2Check"' /etc/X11/xorg.conf
     # Configure the default modeline
     sed -i '/Section\s\+"Monitor"/a\    '"${MODELINE}" /etc/X11/xorg.conf
     # Prevent interference between GPUs
@@ -59,8 +61,9 @@ function configure_nvidia_x_server {
     if [[ "${DEVICE_NAME}" = "Olares One" ]]; then
         print_step_header "Olares One detected. Installing Olares One specific xorg.conf"
         cp -f /templates/xorg/xorg.olares1.conf /etc/X11/xorg.conf
+        print_step_header "Enable NVIDIA HDMI/DP layout helper for hotplug"
+        sed -i 's|^autostart.*=.*$|autostart=true|' /etc/supervisor.d/nvidia-output-layout.ini
     fi
-
 }
 
 # Allow anybody for running x server
