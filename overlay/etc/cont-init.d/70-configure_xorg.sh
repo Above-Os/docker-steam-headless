@@ -61,8 +61,9 @@ function configure_nvidia_x_server {
     if [[ "${DEVICE_NAME}" = "Olares One" ]]; then
         print_step_header "Olares One detected. Installing Olares One specific xorg.conf"
         cp -f /templates/xorg/xorg.olares1.conf /etc/X11/xorg.conf
+        print_step_header "Enable NVIDIA HDMI/DP layout helper for hotplug"
+        sed -i 's|^autostart.*=.*$|autostart=true|' /etc/supervisor.d/nvidia-output-layout.ini
     fi
-
 }
 
 # Allow anybody for running x server
