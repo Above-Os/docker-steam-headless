@@ -11,10 +11,14 @@
 set -e
 
 # CATCH TERM SIGNAL:
+# Also trap EXIT: set -e used to leave the background daemon running (ppid 1)
+# after chmod failed, so supervisor retries hit "Daemon already running".
 _term() {
-    kill -TERM "$pulseaudio_pid" 2>/dev/null
+    if [ -n "${pulseaudio_pid:-}" ]; then
+        kill -TERM "$pulseaudio_pid" 2>/dev/null || true
+    fi
 }
-trap _term SIGTERM SIGINT
+trap _term EXIT SIGTERM SIGINT
 
 # k8s sets PULSE_SERVER=unix:/tmp/pulse/pulse-socket, but the daemon listens on
 # $XDG_RUNTIME_DIR/pulse/native until we explicitly expose that extra socket.
@@ -45,9 +49,13 @@ wait_for_pulse() {
 wait_for_pulse
 
 # Expose the socket path that Steam/container env expects (PULSE_SERVER).
+# default.pa already loads module-native-protocol-unix on this path; only
+# create it if the daemon came up without that module. chmod is best-effort:
+# cont-init creates /tmp/pulse as root, and an unprivileged user cannot
+# chmod a root-owned directory even when it is already 0777.
 if [ -n "${PULSE_SOCKET_DIR:-}" ]; then
-    mkdir -p "${PULSE_SOCKET_DIR}"
-    chmod 777 "${PULSE_SOCKET_DIR}"
+    mkdir -p "${PULSE_SOCKET_DIR}" || true
+    chmod 777 "${PULSE_SOCKET_DIR}" 2>/dev/null || true
     if [ ! -S "${PULSE_SOCKET_DIR}/pulse-socket" ]; then
         echo "PULSEAUDIO: Creating ${PULSE_SOCKET_DIR}/pulse-socket"
         pactl load-module module-native-protocol-unix \
