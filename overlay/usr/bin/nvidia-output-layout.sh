@@ -59,15 +59,17 @@ highest_refresh() {
     '
 }
 
+# An enabled output carries a "<mode>+<x>+<y>" geometry, either right after
+# "connected" or after "primary". Keep the exit status in END: an exit inside a
+# rule jumps to END, so an "exit 1" there would mask a successful match.
 output_is_active() {
     local output="${1:?}"
     xrandr_q | awk -v o="${output}" '
         $1 == o && $2 == "connected" {
-            if ($3 == "primary" && $4 ~ /^[0-9]+x[0-9]+\+/) exit 0
-            if ($3 ~ /^[0-9]+x[0-9]+\+/) exit 0
-            exit 1
+            if ($3 ~ /^[0-9]+x[0-9]+\+/ || $4 ~ /^[0-9]+x[0-9]+\+/) active = 1
+            exit
         }
-        END { exit 1 }
+        END { exit active ? 0 : 1 }
     '
 }
 
@@ -84,96 +86,79 @@ disable_xfce_auto_enable() {
     xfconf-query -c displays -p /AutoEnableProfiles -n -t int -s 0 >/dev/null 2>&1 || true
 }
 
-apply_hdmi() {
-    local hdmi="${1:?}"
-    local dp="${2:-}"
-    local mode rate cmd
-    mode="$(preferred_mode "${hdmi}")"
-    [ -n "${mode}" ] || mode="--auto"
-    cmd=(xrandr)
-    if [ -n "${dp}" ]; then
-        cmd+=(--output "${dp}" --off)
-    fi
-    if [ "${mode}" = "--auto" ]; then
-        cmd+=(--output "${hdmi}" --primary --auto --pos 0x0)
-    else
-        rate="$(highest_refresh "${hdmi}" "${mode}")"
-        cmd+=(--output "${hdmi}" --primary --mode "${mode}" --pos 0x0)
-        if [ -n "${rate}" ]; then
-            cmd+=(--rate "${rate}")
-        fi
-    fi
-    echo "**** Enabling ${hdmi} (${mode}${rate:+ @ ${rate}Hz}), disabling ${dp:-none} ****"
-    "${cmd[@]}"
+has_mode() {
+    local output="${1:?}"
+    local mode="${2:?}"
+    xrandr_q | awk -v o="${output}" -v m="${mode}" '
+        $1 == o { p=1; next }
+        p && $0 ~ /^[^[:space:]]/ { exit }
+        p && $1 == m { found=1 }
+        END { exit found ? 0 : 1 }
+    '
 }
 
-apply_dp() {
-    local hdmi="${1:-}"
-    local dp="${2:?}"
-    local cmd
-    cmd=(xrandr)
-    if [ -n "${hdmi}" ]; then
-        cmd+=(--output "${hdmi}" --off)
-    fi
-    cmd+=(--output "${dp}" --primary --pos 0x0)
-    if [ -n "${DISPLAY_SIZEW:-}" ] && [ -n "${DISPLAY_SIZEH:-}" ]; then
-        if xrandr_q | awk -v o="${dp}" -v m="${DISPLAY_SIZEW}x${DISPLAY_SIZEH}" '
-            $1 == o { p=1; next }
-            p && $0 ~ /^[^[:space:]]/ { exit }
-            p && $1 == m { found=1 }
-            END { exit found ? 0 : 1 }
-        '; then
-            cmd+=(--mode "${DISPLAY_SIZEW}x${DISPLAY_SIZEH}")
-            if [ -n "${DISPLAY_REFRESH:-}" ]; then
-                cmd+=(--rate "${DISPLAY_REFRESH}")
-            fi
-        else
-            cmd+=(--auto)
+# Mode to use when a head is switched on. A head that is already on keeps
+# whatever mode it has: Sunshine and the user own the resolution once the
+# desktop is up, and re-asserting a default here would undo their changes.
+enable_args() {
+    local output="${1:?}"
+    local role="${2:?}"
+    local mode rate
+    if [ "${role}" = "hdmi" ]; then
+        mode="$(preferred_mode "${output}")"
+        if [ -n "${mode}" ]; then
+            rate="$(highest_refresh "${output}" "${mode}")"
         fi
-    else
-        cmd+=(--auto)
+    elif [ -n "${DISPLAY_SIZEW:-}" ] && [ -n "${DISPLAY_SIZEH:-}" ] \
+        && has_mode "${output}" "${DISPLAY_SIZEW}x${DISPLAY_SIZEH}"; then
+        mode="${DISPLAY_SIZEW}x${DISPLAY_SIZEH}"
+        rate="${DISPLAY_REFRESH:-}"
     fi
-    echo "**** Enabling ${dp} (headless), disabling ${hdmi:-none} ****"
-    "${cmd[@]}"
-}
-
-layout_needed() {
-    local hdmi="${1:-}"
-    local dp="${2:-}"
-    if hdmi_has_real_monitor "${hdmi}"; then
-        output_is_active "${hdmi}" || return 0
-        if [ -n "${dp}" ] && output_is_active "${dp}"; then
-            return 0
-        fi
-        return 1
-    fi
-    if [ -z "${dp}" ]; then
-        return 1
-    fi
-    output_is_active "${dp}" || return 0
-    if [ -n "${hdmi}" ] && output_is_active "${hdmi}"; then
+    if [ -z "${mode}" ]; then
+        printf '%s' "--auto"
         return 0
     fi
-    return 1
+    printf '%s' "--mode ${mode}"
+    if [ -n "${rate}" ]; then
+        printf '%s' " --rate ${rate}"
+    fi
 }
 
 apply_layout() {
-    local hdmi dp
+    local hdmi dp want unwanted role cmd mode_args
     hdmi="$(first_connected HDMI)"
     dp="$(first_connected DP)"
     if [ -z "${hdmi}" ] && [ -z "${dp}" ]; then
-        echo "**** No HDMI or DP outputs reported as connected ****"
         return 0
     fi
     disable_xfce_auto_enable
-    if ! layout_needed "${hdmi}" "${dp}"; then
-        return 0
-    fi
+
     if hdmi_has_real_monitor "${hdmi}"; then
-        apply_hdmi "${hdmi}" "${dp}"
-    elif [ -n "${dp}" ]; then
-        apply_dp "${hdmi}" "${dp}"
+        want="${hdmi}"
+        unwanted="${dp}"
+        role="hdmi"
+    else
+        want="${dp}"
+        unwanted="${hdmi}"
+        role="dp"
     fi
+    [ -n "${want}" ] || return 0
+
+    cmd=(xrandr)
+    if [ -n "${unwanted}" ] && output_is_active "${unwanted}"; then
+        cmd+=(--output "${unwanted}" --off)
+    fi
+    if output_is_active "${want}"; then
+        # Nothing to switch on, so only step in when the wrong head is lit.
+        [ "${#cmd[@]}" -gt 1 ] || return 0
+    else
+        cmd+=(--output "${want}" --primary --pos 0x0)
+        read -r -a mode_args <<< "$(enable_args "${want}" "${role}")"
+        cmd+=("${mode_args[@]}")
+    fi
+
+    echo "**** Applying layout: ${cmd[*]:1} ****"
+    "${cmd[@]}"
 }
 
 echo "**** Starting NVIDIA output layout helper ****"
