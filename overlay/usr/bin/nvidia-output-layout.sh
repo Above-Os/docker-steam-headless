@@ -19,23 +19,37 @@ _term() {
 }
 trap _term SIGTERM SIGINT
 
-POLL_INTERVAL="${NVIDIA_OUTPUT_LAYOUT_POLL:-2}"
+POLL_INTERVAL="${NVIDIA_OUTPUT_LAYOUT_POLL:-5}"
 DUMMY_PREFERRED="1024x768"
 
 wait_for_x
 
-xrandr_q() {
-    xrandr -q 2>/dev/null || true
+# `xrandr -q` makes the driver re-probe every output, which reads EDID over the
+# physical HDMI DDC line and stalls the whole X server for ~75ms. Probe once per
+# pass and let the parsers below read that snapshot: they all run before the
+# layout is applied, so they cannot observe a state the snapshot does not have.
+#
+# Do not turn these back into individual `xrandr -q` calls. One pass needs five
+# of them, and at 4K60 that stalled the display engine for ~356ms every poll,
+# which a directly attached monitor shows as a stutter every couple of seconds.
+XRANDR_SNAPSHOT=""
+
+refresh_snapshot() {
+    XRANDR_SNAPSHOT="$(xrandr -q 2>/dev/null || true)"
+}
+
+xrandr_snapshot() {
+    printf '%s\n' "${XRANDR_SNAPSHOT}"
 }
 
 first_connected() {
     local prefix="${1:?}"
-    xrandr_q | awk -v p="${prefix}" '$1 ~ ("^" p "-[0-9]+$") && $2 == "connected" { print $1; exit }'
+    xrandr_snapshot | awk -v p="${prefix}" '$1 ~ ("^" p "-[0-9]+$") && $2 == "connected" { print $1; exit }'
 }
 
 preferred_mode() {
     local output="${1:?}"
-    xrandr_q | awk -v o="${output}" '
+    xrandr_snapshot | awk -v o="${output}" '
         $1 == o { p=1; next }
         p && $0 ~ /^[^[:space:]]/ { exit }
         p && /\+/ { print $1; exit }
@@ -45,7 +59,7 @@ preferred_mode() {
 highest_refresh() {
     local output="${1:?}"
     local mode="${2:?}"
-    xrandr_q | awk -v o="${output}" -v m="${mode}" '
+    xrandr_snapshot | awk -v o="${output}" -v m="${mode}" '
         $1 == o { p=1; next }
         p && $0 ~ /^[^[:space:]]/ { exit }
         p && $1 == m {
@@ -64,7 +78,7 @@ highest_refresh() {
 # rule jumps to END, so an "exit 1" there would mask a successful match.
 output_is_active() {
     local output="${1:?}"
-    xrandr_q | awk -v o="${output}" '
+    xrandr_snapshot | awk -v o="${output}" '
         $1 == o && $2 == "connected" {
             if ($3 ~ /^[0-9]+x[0-9]+\+/ || $4 ~ /^[0-9]+x[0-9]+\+/) active = 1
             exit
@@ -89,7 +103,7 @@ disable_xfce_auto_enable() {
 has_mode() {
     local output="${1:?}"
     local mode="${2:?}"
-    xrandr_q | awk -v o="${output}" -v m="${mode}" '
+    xrandr_snapshot | awk -v o="${output}" -v m="${mode}" '
         $1 == o { p=1; next }
         p && $0 ~ /^[^[:space:]]/ { exit }
         p && $1 == m { found=1 }
@@ -126,6 +140,7 @@ enable_args() {
 
 apply_layout() {
     local hdmi dp want unwanted role cmd mode_args
+    refresh_snapshot
     hdmi="$(first_connected HDMI)"
     dp="$(first_connected DP)"
     if [ -z "${hdmi}" ] && [ -z "${dp}" ]; then
