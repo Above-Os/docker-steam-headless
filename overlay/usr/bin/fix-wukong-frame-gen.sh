@@ -219,23 +219,23 @@ else
     warn "Proton wine not found; skipped wine reg add (system.reg already patched)"
 fi
 
-if SRC="$(find_driver_dlssg)"; then
-    mkdir -p "$(dirname "${DLSSG_DST}")" "$(dirname "${DLSSG_PFX}")"
-    if [ -f "${DLSSG_DST}" ] && [ ! -f "${DLSSG_DST}.orig" ]; then
-        cp -a "${DLSSG_DST}" "${DLSSG_DST}.orig"
-        ok "Backed up game nvngx_dlssg.dll -> ${DLSSG_DST}.orig"
-    elif [ -f "${DLSSG_DST}" ]; then
-        ts="$(date +%Y%m%d%H%M%S)"
-        cp -a "${DLSSG_DST}" "${DLSSG_DST}.bak.${ts}"
-        ok "Backed up game nvngx_dlssg.dll -> ${DLSSG_DST}.bak.${ts}"
-    fi
-    cp -a "${SRC}" "${DLSSG_DST}"
-    cp -a "${SRC}" "${DLSSG_PFX}"
-    chmod 755 "${DLSSG_DST}" "${DLSSG_PFX}" 2>/dev/null || true
-    ok "Installed driver nvngx_dlssg.dll ($(basename "${SRC}")) into game + prefix"
-else
-    warn "NVIDIA Wine nvngx_dlssg.dll not found. RTX 40 may still work; RTX 50 usually needs it under /usr/lib/*/nvidia/wine/"
-fi
+# if SRC="$(find_driver_dlssg)"; then
+#     mkdir -p "$(dirname "${DLSSG_DST}")" "$(dirname "${DLSSG_PFX}")"
+#     if [ -f "${DLSSG_DST}" ] && [ ! -f "${DLSSG_DST}.orig" ]; then
+#         cp -a "${DLSSG_DST}" "${DLSSG_DST}.orig"
+#         ok "Backed up game nvngx_dlssg.dll -> ${DLSSG_DST}.orig"
+#     elif [ -f "${DLSSG_DST}" ]; then
+#         ts="$(date +%Y%m%d%H%M%S)"
+#         cp -a "${DLSSG_DST}" "${DLSSG_DST}.bak.${ts}"
+#         ok "Backed up game nvngx_dlssg.dll -> ${DLSSG_DST}.bak.${ts}"
+#     fi
+#     cp -a "${SRC}" "${DLSSG_DST}"
+#     cp -a "${SRC}" "${DLSSG_PFX}"
+#     chmod 755 "${DLSSG_DST}" "${DLSSG_PFX}" 2>/dev/null || true
+#     ok "Installed driver nvngx_dlssg.dll ($(basename "${SRC}")) into game + prefix"
+# else
+#     warn "NVIDIA Wine nvngx_dlssg.dll not found. RTX 40 may still work; RTX 50 usually needs it under /usr/lib/*/nvidia/wine/"
+# fi
 
 log ""
 ok "Done. Launch Black Myth: Wukong and enable Frame Generation in the graphics menu."
