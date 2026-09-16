@@ -21,31 +21,37 @@ DYNAMIC_PORT_AUDIO_STREAM=$(get_next_unused_port ${DYNAMIC_PORT_VNC})
 export PORT_AUDIO_STREAM=${PORT_AUDIO_STREAM:-$DYNAMIC_PORT_AUDIO_STREAM}
 print_step_header "Configure pulseaudio encoded stream port '${PORT_AUDIO_STREAM}'"
 
+function configure_vnc_audio_stream {
+    # Pulse-encoded stream consumed by the noVNC frontend websocket (PORT_AUDIO_STREAM).
+    # Secondary mode still needs this: x11vnc captures the shared host :0, and the
+    # WebUI audio proxy keeps talking to this local encoder.
+    if [[ "${ENABLE_VNC_AUDIO}" == "true" ]]; then
+        print_step_header "Enable audio stream"
+        sed -i 's|^autostart.*=.*$|autostart=true|' /etc/supervisor.d/vnc-audio.ini
+    else
+        print_step_header "Disable audio stream"
+        print_step_header "Disable audio websock"
+        sed -i 's|^autostart.*=.*$|autostart=false|' /etc/supervisor.d/vnc-audio.ini
+    fi
+}
+
 if ([ "${MODE}" != "s" ] && [ "${MODE}" != "secondary" ]); then
 
     if [ "${WEB_UI_MODE:-}" = "vnc" ]; then
         print_step_header "Enable VNC server"
         sed -i 's|^autostart.*=.*$|autostart=true|' /etc/supervisor.d/vnc.ini
-
-        # TODO: Remove this... Always enable VNC audio
-        if [[ "${ENABLE_VNC_AUDIO}" == "true" ]]; then
-            # Enable supervisord script
-            sed -i 's|^autostart.*=.*$|autostart=true|' /etc/supervisor.d/vnc-audio.ini
-        else
-            print_step_header "Disable audio stream"
-            print_step_header "Disable audio websock"
-            # Disable supervisord script
-            sed -i 's|^autostart.*=.*$|autostart=false|' /etc/supervisor.d/vnc-audio.ini
-        fi
+        configure_vnc_audio_stream
     else
         print_step_header "Disable VNC server"
         sed -i 's|^autostart.*=.*$|autostart=false|' /etc/supervisor.d/vnc.ini
         sed -i 's|^autostart.*=.*$|autostart=false|' /etc/supervisor.d/vnc-audio.ini
     fi
 else
-    print_step_header "VNC server not available when container is run in 'secondary' mode"
-    sed -i 's|^autostart.*=.*$|autostart=false|' /etc/supervisor.d/vnc.ini
-    sed -i 's|^autostart.*=.*$|autostart=false|' /etc/supervisor.d/vnc-audio.ini
+    print_step_header "Enable VNC server"
+    sed -i 's|^autostart.*=.*$|autostart=true|' /etc/supervisor.d/vnc.ini
+    # print_step_header "VNC server not available when container is run in 'secondary' mode"
+    # sed -i 's|^autostart.*=.*$|autostart=false|' /etc/supervisor.d/vnc.ini
+    configure_vnc_audio_stream
 fi
 
 echo -e "\e[34mDONE\e[0m"

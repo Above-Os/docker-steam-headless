@@ -8,7 +8,7 @@ Encoding=UTF-8
 Type=Application
 Name=Steam
 Comment=Launch steam on login
-Exec=/usr/games/steam %U ${STEAM_ARGS:-}
+Exec=/usr/bin/start-steam.sh %U ${STEAM_ARGS:-}
 Icon=steam
 OnlyShowIn=XFCE;
 RunHook=0
@@ -94,6 +94,19 @@ if [ "${ENABLE_STEAM:-}" = "true" ]; then
         mkdir -p "${USER_HOME:?}/.config/autostart"
         echo "${steam_autostart_desktop:?}" >"${USER_HOME:?}/.config/autostart/Steam.desktop"
         sed -i 's|^autostart.*=.*$|autostart=false|' /etc/supervisor.d/steam.ini
+    fi
+
+    # htmlcache is on the persistent home volume. A leftover Chromium
+    # SingletonLock from a previous pod hostname makes steamwebhelper skip
+    # the UI and leave a black, un-closeable Steam shell on the shared X
+    # display. Supervisor restarts go through start-steam.sh as well.
+    HTMLCACHE="${USER_HOME:?}/.steam/steam/config/htmlcache"
+    if [ -d "${HTMLCACHE}" ]; then
+        print_step_header "Clear stale Steam CEF profile locks"
+        rm -f \
+            "${HTMLCACHE}/SingletonLock" \
+            "${HTMLCACHE}/SingletonCookie" \
+            "${HTMLCACHE}/SingletonSocket"
     fi
 
     # Ensuring Steam Play is enabled for all titles

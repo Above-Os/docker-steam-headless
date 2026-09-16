@@ -116,8 +116,49 @@ wait_for_udevd() {
     done
 }
 
+# True when the underlay macvlan NIC exists. IP may still be missing.
+has_net1_device() {
+    [ -d /sys/class/net/net1 ]
+}
+
+# True when net1 has an IPv4 address (olaresd is not proxying mDNS).
+has_underlay_ip() {
+    [ -n "$(ifconfig net1 2>/dev/null | grep -oP 'inet (addr:)?\K[\d\.]+' | head -n1)" ]
+}
+
+# macvlan-init can lag the container entrypoint by a few seconds.
+wait_for_underlay_ip() {
+    local max="${1:-15}"
+    local ct=0
+    if ! has_net1_device; then
+        return 1
+    fi
+    while ! has_underlay_ip; do
+        sleep 1
+        ct=$((ct + 1))
+        if [ "${ct}" -ge "${max}" ]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Private system bus used only by avahi (never the host /run/dbus socket).
+export_avahi_dbus() {
+    export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/run/avahi-bus/bus"
+}
+
 # Wait for avahi-daemon to start
 wait_for_avahi() {
+    if ! has_net1_device; then
+        echo "skip avahi-daemon: no net1, mDNS is proxied by olaresd"
+        return 0
+    fi
+    if ! wait_for_underlay_ip 15; then
+        echo "skip avahi-daemon: net1 has no IPv4, mDNS is proxied by olaresd"
+        return 0
+    fi
+    export_avahi_dbus
     MAX=10
     CT=0
     while ! pgrep -x avahi-daemon >/dev/null 2>&1; do

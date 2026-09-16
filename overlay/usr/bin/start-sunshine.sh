@@ -43,7 +43,7 @@ if [ -f /etc/ld.so.preload ]; then
 fi
 
 EXTERNAL_IP="${NODE_IP:?}"
-UNDERLAY_IP=$(ifconfig net1 | grep -oP 'inet (addr:)?\K[\d\.]+' | head -n1)
+UNDERLAY_IP=$(ifconfig net1 2>/dev/null | grep -oP 'inet (addr:)?\K[\d\.]+' | head -n1)
 if [ "X${UNDERLAY_IP}" != "X" ]; then
     EXTERNAL_IP="${UNDERLAY_IP:?}"
 fi
@@ -74,18 +74,20 @@ if [ -f "${USER_HOME:?}/.config/autostart/Sunshine.desktop" ]; then
 fi
 
 
-# EXECUTE PROCESS:
-# Wait for the X server to start
-wait_for_x
+if ([ "${MODE}" != "s" ] && [ "${MODE}" != "secondary" ]); then
+    # EXECUTE PROCESS:
+    # Wait for the X server to start
+    wait_for_x
 
-# Start a session bus instance of dbus-daemon
-wait_for_desktop_dbus_session
-export_desktop_dbus_session
+    # Start a session bus instance of dbus-daemon
+    wait_for_desktop_dbus_session
+    export_desktop_dbus_session
 
-# Wait for the desktop to start
-wait_for_desktop
-
-# Wait for avahi-daemon (mDNS) to start
+    # Wait for the desktop to start
+    wait_for_desktop
+fi
+# Wait for avahi-daemon only when macvlan net1 is the mDNS path.
+# Without net1, olaresd proxies _nvstream._tcp and Sunshine advertises NODE_IP.
 echo "wait for avahi-daemon"
 wait_for_avahi
 

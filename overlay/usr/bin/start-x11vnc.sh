@@ -22,7 +22,12 @@ trap _term SIGTERM SIGINT
 # Wait for the X server to start
 wait_for_x
 # Start the x11vnc server
-/usr/bin/x11vnc -display ${DISPLAY} -rfbport ${PORT_VNC} -shared -forever&
+EXTRA_ARGS="${VNC_EXTRA_ARGS:-}"
+if ([ "${MODE}" == "s" ] || [ "${MODE}" == "secondary" ]); then
+    EXTRA_ARGS="${EXTRA_ARGS} -auth /home/default/.Xauthority -noshm "
+fi
+
+/usr/bin/x11vnc -display ${DISPLAY} -rfbport ${PORT_VNC} -shared -forever ${EXTRA_ARGS} &
 x11vnc_pid=$!
 
 
